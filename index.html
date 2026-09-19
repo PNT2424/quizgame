@@ -833,10 +833,6 @@
                         <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="4">
                         <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="5">
                     </div>
-                    <!-- DÒNG THÔNG BÁO DEBUG MÃ PIN TRONG BỘ NHỚ -->
-                    <p id="pin-debug-helper" class="text-[11px] text-purple-400 font-mono text-center pt-2 italic">
-                        (Mã PIN hiện tại trong bộ nhớ: <span id="debug-active-pin-text" class="text-amber-300 font-bold">839210</span>)
-                    </p>
                 </div>
 
                 <button type="submit" 
@@ -1175,7 +1171,7 @@
             }
         }
 
-        // 🔴 SỬA LỖI MÃ PIN: TẠO VÀ ĐỒNG BỘ MÃ PIN 6 SỐ DẠNG CHUỖI CÙNG TRẠNG THÁI PHÒNG
+        // 🔴 SỬA LỖI MÃ PIN: PHÍA GIẢNG VIÊN (NƠI TẠO & GIỮ MÃ PIN DUY NHẤT)
         function generateNewPIN(e) {
             if (e) {
                 e.preventDefault();
@@ -1193,10 +1189,10 @@
             localStorage.setItem('activePin', pinCode);
             localStorage.setItem('quizgame_room_status', 'open');
             
-            updateDebugActivePinDisplay();
+            updateRoomUI();
             broadcastSyncRoomState();
 
-            alert(`✅ Đã cập nhật Mã PIN phòng thi mới thành công: ${pinCode}`);
+            alert(`✅ Đã tạo Mã PIN phòng thi mới: ${pinCode}`);
         }
 
         function toggleRoomStatus(e) {
@@ -1207,12 +1203,6 @@
             roomState.isOpen = !roomState.isOpen;
             localStorage.setItem('quizgame_room_status', roomState.isOpen ? 'open' : 'closed');
             saveRoomState();
-        }
-
-        function updateDebugActivePinDisplay() {
-            const activePin = (localStorage.getItem('quizgame_active_pin') || localStorage.getItem('activePin') || (roomState && roomState.pin) || '839210').toString().trim();
-            const debugTextElem = document.getElementById('debug-active-pin-text');
-            if (debugTextElem) debugTextElem.textContent = activePin;
         }
 
         function submitInstructorLogin(e) {
@@ -1227,6 +1217,19 @@
 
             if (usernameInput === 'admin' && passwordInput === 'admin123') {
                 errorMsg.classList.add('hidden');
+                
+                let existingPin = (localStorage.getItem('quizgame_pin') || localStorage.getItem('quizgame_active_pin') || '').trim();
+                if (!existingPin) {
+                    existingPin = String(Math.floor(100000 + Math.random() * 900000)).trim();
+                }
+                localStorage.setItem('quizgame_pin', existingPin);
+                localStorage.setItem('quizgame_active_pin', existingPin);
+                localStorage.setItem('quizgame_room_status', 'open');
+                roomState.pin = existingPin;
+                syncRoomState.pin = existingPin;
+                roomState.isOpen = true;
+                saveRoomState();
+
                 saveInstructorSession(true);
                 closeModal('instructor-login-modal');
                 showAdminView();
@@ -1597,28 +1600,26 @@
             }
         }
 
-        function updateLobbyUI() {
-            renderLobbyPlayers();
+        function getStudentInputPin() {
+            const pinInputs = document.querySelectorAll('.pin-input');
+            let rawPin = "";
+            pinInputs.forEach(input => rawPin += (input.value || ''));
+            return String(rawPin).trim();
         }
 
         function submitStudentJoin(e) {
             e.preventDefault();
             const fullname = document.getElementById('student-fullname').value.trim();
-            const pinInputs = document.querySelectorAll('.pin-input');
-            let rawPin = "";
-            pinInputs.forEach(input => rawPin += input.value);
-            
-            let inputPin = String(rawPin).trim();
-            let activePin = String(localStorage.getItem('quizgame_pin') || localStorage.getItem('quizgame_active_pin') || localStorage.getItem('activePin') || (roomState && roomState.pin) || '839210').trim();
+            let enteredPin = getStudentInputPin();
+            let hostPin = String(localStorage.getItem('quizgame_pin') || localStorage.getItem('quizgame_active_pin') || (roomState && roomState.pin) || '').trim();
             let roomStatus = localStorage.getItem('quizgame_room_status') || (roomState && roomState.isOpen ? 'open' : 'closed');
 
             const errorMsg = document.getElementById('student-error-msg');
 
-            // ĐIỀU KIỆN SO SÁNH CHUẨN XÁC CHUỖI KHÔNG KHOẢNG TRẮNG
-            const isPinValid = (inputPin === activePin) && (roomStatus === 'open');
+            const isPinValid = (enteredPin === hostPin) && (roomStatus === 'open');
 
             if (!isPinValid) {
-                errorMsg.textContent = `Mã PIN [${inputPin || 'Trống'}] không đúng hoặc Giảng viên chưa tạo phòng thi!`;
+                errorMsg.textContent = 'Mã PIN không chính xác! Vui lòng kiểm tra lại màn hình của Giảng viên.';
                 errorMsg.classList.remove('hidden');
                 return;
             }
@@ -1631,7 +1632,7 @@
                 fullname: fullname,
                 avatar: selectedStudentAvatar,
                 joinedAt: new Date().toISOString(),
-                roomPin: inputPin
+                roomPin: enteredPin
             };
 
             let playersList = JSON.parse(localStorage.getItem('quizgame_players') || '[]');
@@ -1641,7 +1642,7 @@
                 fullname: fullname,
                 avatar: selectedStudentAvatar,
                 joinedAt: currentStudentInfo.joinedAt,
-                roomPin: inputPin
+                roomPin: enteredPin
             });
             localStorage.setItem('quizgame_players', JSON.stringify(playersList));
             localStorage.setItem('quizgame_last_update', Date.now().toString());
@@ -2479,6 +2480,12 @@
 
         function listenStorageChanges() {
             window.addEventListener('storage', (e) => {
+                if (e.key === 'quizgame_pin' || e.key === 'quizgame_room_status' || e.key === 'quizgame_active_pin') {
+                    const newPin = (localStorage.getItem('quizgame_pin') || roomState.pin).trim();
+                    roomState.pin = newPin;
+                    syncRoomState.pin = newPin;
+                    updateRoomUI();
+                }
                 if (e.key === 'quizgame_players' || e.key === 'quizgame_last_update') {
                     renderLobbyPlayers();
                 }
