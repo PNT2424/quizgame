@@ -1512,51 +1512,93 @@
             renderAvatarPicker();
         }
 
-        function updateLobbyUI() {
+        function renderLobbyPlayers() {
+            let playersList = [];
+            try {
+                playersList = JSON.parse(localStorage.getItem('quizgame_players') || '[]');
+            } catch (err) {
+                playersList = [];
+            }
+
+            if (!Array.isArray(playersList)) playersList = [];
+
+            // Đồng bộ dữ liệu mảng syncRoomState.joinedStudents với playersList từ localStorage
+            if (playersList.length > 0) {
+                playersList.forEach(st => {
+                    const stId = st.id || ('st_' + Date.now());
+                    const name = st.name || st.fullname || 'Sinh viên';
+                    if (!syncRoomState.joinedStudents.some(s => s.id === stId || (s.fullname === name || s.name === name))) {
+                        syncRoomState.joinedStudents.push({
+                            id: stId,
+                            name: name,
+                            fullname: name,
+                            avatar: st.avatar || '🦊'
+                        });
+                    }
+                });
+            }
+
             const pinDisplay = document.getElementById('lobby-pin-display');
             const studentCount = document.getElementById('lobby-student-count');
             const adminJoinedCount = document.getElementById('admin-joined-count');
             const listContainer = document.getElementById('lobby-students-list');
             const adminGridContainer = document.getElementById('admin-students-card-grid');
 
-            if (pinDisplay) pinDisplay.textContent = syncRoomState.pin;
-            const countText = `${syncRoomState.joinedStudents.length} bạn`;
+            if (pinDisplay) pinDisplay.textContent = syncRoomState.pin || (roomState && roomState.pin) || '839210';
+            
+            const displayList = syncRoomState.joinedStudents.length > 0 ? syncRoomState.joinedStudents : playersList.map(p => ({
+                id: p.id,
+                fullname: p.name || p.fullname || 'Sinh viên',
+                avatar: p.avatar || '🦊'
+            }));
+
+            const countText = `${displayList.length} bạn`;
             if (studentCount) studentCount.textContent = countText;
             if (adminJoinedCount) adminJoinedCount.textContent = countText;
 
             // Render Danh sách sinh viên trong Lobby Sinh viên
             if (listContainer) {
                 listContainer.innerHTML = '';
-                syncRoomState.joinedStudents.forEach(st => {
-                    const avatar = st.avatar || '🦊';
-                    const div = document.createElement('div');
-                    div.className = 'flex items-center gap-2.5 p-2.5 rounded-2xl bg-purple-900/90 border border-purple-500/50 text-xs font-bold text-white shadow-md animate-pulse';
-                    div.innerHTML = `
-                        <span class="text-xl shrink-0 p-1.5 rounded-xl bg-purple-950 border border-purple-700/60">${avatar}</span>
-                        <span class="truncate">${escapeHtml(st.fullname)}</span>
-                    `;
-                    listContainer.appendChild(div);
-                });
+                if (displayList.length === 0) {
+                    listContainer.innerHTML = `<div class="col-span-full text-center py-4 text-xs text-purple-400">Chưa có sinh viên nào vào phòng...</div>`;
+                } else {
+                    displayList.forEach(st => {
+                        const avatar = st.avatar || '🦊';
+                        const name = st.fullname || st.name || 'Sinh viên';
+                        const div = document.createElement('div');
+                        div.className = 'flex items-center gap-2.5 p-2.5 rounded-2xl bg-purple-900/90 border border-purple-500/50 text-xs font-bold text-white shadow-md animate-pulse';
+                        div.innerHTML = `
+                            <span class="text-xl shrink-0 p-1.5 rounded-xl bg-purple-950 border border-purple-700/60">${avatar}</span>
+                            <span class="truncate">${escapeHtml(name)}</span>
+                        `;
+                        listContainer.appendChild(div);
+                    });
+                }
             }
 
             // Render Danh sách sinh viên trong Bảng điều khiển Giảng viên dạng Grid Card
             if (adminGridContainer) {
                 adminGridContainer.innerHTML = '';
-                if (syncRoomState.joinedStudents.length === 0) {
+                if (displayList.length === 0) {
                     adminGridContainer.innerHTML = `<div class="col-span-full text-center py-4 text-xs text-purple-400">Chưa có sinh viên nào vào phòng...</div>`;
                 } else {
-                    syncRoomState.joinedStudents.forEach(st => {
+                    displayList.forEach(st => {
                         const avatar = st.avatar || '🦊';
+                        const name = st.fullname || st.name || 'Sinh viên';
                         const div = document.createElement('div');
                         div.className = 'flex items-center gap-2 p-2.5 rounded-xl bg-purple-900/80 border border-purple-700/60 text-xs font-bold text-white shadow-sm';
                         div.innerHTML = `
                             <span class="text-lg shrink-0">${avatar}</span>
-                            <span class="truncate text-[11px]">${escapeHtml(st.fullname)}</span>
+                            <span class="truncate text-[11px]">${escapeHtml(name)}</span>
                         `;
                         adminGridContainer.appendChild(div);
                     });
                 }
             }
+        }
+
+        function updateLobbyUI() {
+            renderLobbyPlayers();
         }
 
         function submitStudentJoin(e) {
@@ -1585,22 +1627,32 @@
             const studentId = 'st_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
             currentStudentInfo = {
                 id: studentId,
+                name: fullname,
                 fullname: fullname,
                 avatar: selectedStudentAvatar,
                 joinedAt: new Date().toISOString(),
                 roomPin: inputPin
             };
 
-            let players = JSON.parse(localStorage.getItem('quizgame_players') || '[]');
-            players.push(currentStudentInfo);
-            localStorage.setItem('quizgame_players', JSON.stringify(players));
+            let playersList = JSON.parse(localStorage.getItem('quizgame_players') || '[]');
+            playersList.push({
+                id: Date.now(),
+                name: fullname,
+                fullname: fullname,
+                avatar: selectedStudentAvatar,
+                joinedAt: currentStudentInfo.joinedAt,
+                roomPin: inputPin
+            });
+            localStorage.setItem('quizgame_players', JSON.stringify(playersList));
+            localStorage.setItem('quizgame_last_update', Date.now().toString());
 
             if (!syncRoomState.joinedStudents.some(s => s.id === studentId)) {
-                syncRoomState.joinedStudents.push({ id: studentId, fullname: fullname, avatar: selectedStudentAvatar });
+                syncRoomState.joinedStudents.push({ id: studentId, name: fullname, fullname: fullname, avatar: selectedStudentAvatar });
                 broadcastSyncRoomState();
             }
 
             closeModal('student-join-modal');
+            renderLobbyPlayers();
             showLobbyView();
         }
 
@@ -2425,6 +2477,17 @@
             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
 
+        function listenStorageChanges() {
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'quizgame_players' || e.key === 'quizgame_last_update') {
+                    renderLobbyPlayers();
+                }
+                if (e.key === 'quizgame_game_state' && e.newValue === 'playing') {
+                    startStudentQuiz();
+                }
+            });
+        }
+
         function startStudentQuiz() {
             currentQuestionIndex = 0;
             syncRoomState.questionIndex = 0;
@@ -2433,12 +2496,6 @@
             loadSyncQuestion();
         }
 
-        window.addEventListener('storage', (e) => {
-            if (e.key === 'quizgame_game_state' && e.newValue === 'playing') {
-                startStudentQuiz();
-            }
-        });
-
         window.addEventListener('DOMContentLoaded', () => {
             document.getElementById('stat-high-score').textContent = highScore.toLocaleString('vi-VN');
             updateQuestionCountUI();
@@ -2446,6 +2503,8 @@
             updateInstructorUI();
             setupPinInputAutoAdvance();
             renderLeaderboardUI();
+            renderLobbyPlayers();
+            listenStorageChanges();
             handleSyncRoomStateChange();
 
             window.addEventListener('click', (e) => {
