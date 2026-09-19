@@ -808,7 +808,7 @@
             <form onsubmit="submitStudentJoin(event)" class="space-y-6">
                 <div>
                     <label class="block text-xs font-bold text-purple-200 mb-2 uppercase tracking-wider">1. Họ và tên / Mã Sinh Viên</label>
-                    <input type="text" id="student-fullname" required placeholder="Ví dụ: Nguyễn Văn A - SV12345"
+                    <input type="text" id="studentNameInput" required placeholder="Ví dụ: Nguyễn Văn A - SV12345"
                            class="w-full px-4 py-3.5 rounded-xl bg-purple-950/90 border border-purple-600/60 text-white placeholder-purple-400/50 focus:outline-none focus:border-emerald-400">
                 </div>
 
@@ -826,16 +826,16 @@
                 <div>
                     <label class="block text-xs font-bold text-purple-200 mb-2 uppercase tracking-wider">3. Nhập Mã PIN 6 số</label>
                     <div class="flex justify-center gap-2 sm:gap-3" id="pin-inputs-container">
-                        <input type="text" id="studentPinInput" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="0">
-                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="1">
-                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="2">
-                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="3">
-                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="4">
-                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="5">
+                        <input type="text" id="studentPinInput" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input pin-digit-input" data-index="0">
+                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input pin-digit-input" data-index="1">
+                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input pin-digit-input" data-index="2">
+                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input pin-digit-input" data-index="3">
+                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input pin-digit-input" data-index="4">
+                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input pin-digit-input" data-index="5">
                     </div>
                 </div>
 
-                <button type="submit" 
+                <button id="btnJoinLobby" type="submit" 
                         class="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-400 text-slate-950 font-black text-base uppercase tracking-wider shadow-glow-green cursor-pointer">
                     VÀO PHÒNG CHỜ GIẢNG VIÊN
                 </button>
@@ -1600,61 +1600,82 @@
             }
         }
 
-        function getStudentInputPin() {
-            const pinInputs = document.querySelectorAll('.pin-input');
-            let rawPin = "";
-            pinInputs.forEach(input => rawPin += (input.value || ''));
-            return String(rawPin).trim();
+        function showPinError(msg) {
+            const errorMsg = document.getElementById('student-error-msg');
+            if (errorMsg) {
+                errorMsg.textContent = msg;
+                errorMsg.classList.remove('hidden');
+            } else {
+                alert(msg);
+            }
+        }
+
+        function showStudentLobbyView() {
+            renderLobbyPlayers();
+            showLobbyView();
         }
 
         function submitStudentJoin(e) {
-            e.preventDefault();
-            const fullname = document.getElementById('student-fullname').value.trim();
-            let enteredPin = getStudentInputPin();
-            let hostPin = String(localStorage.getItem('quizgame_pin') || localStorage.getItem('quizgame_active_pin') || (roomState && roomState.pin) || '').trim();
-            let roomStatus = localStorage.getItem('quizgame_room_status') || (roomState && roomState.isOpen ? 'open' : 'closed');
+            if (e) e.preventDefault();
 
-            const errorMsg = document.getElementById('student-error-msg');
+            // 1. Lấy Họ tên / MSV (tương thích cả studentNameInput và student-fullname)
+            const nameInputElem = document.getElementById('studentNameInput') || document.getElementById('student-fullname');
+            const nameInput = nameInputElem ? nameInputElem.value.trim() : '';
 
-            const isPinValid = (enteredPin === hostPin) && (roomStatus === 'open');
+            // 2. Tự động lấy và ghép 6 ký tự từ 6 ô vuông PIN
+            const pinInputs = document.querySelectorAll('.pin-digit-input, .pin-input');
+            let enteredPin = '';
+            pinInputs.forEach(input => { enteredPin += input.value.trim(); });
 
-            if (!isPinValid) {
-                errorMsg.textContent = 'Mã PIN không chính xác! Vui lòng kiểm tra lại màn hình của Giảng viên.';
-                errorMsg.classList.remove('hidden');
+            // 3. Kiểm tra dữ liệu đầu vào
+            if (!nameInput) {
+                alert('Vui lòng nhập Họ và tên hoặc Mã sinh viên!');
+                return;
+            }
+            if (enteredPin.length !== 6) {
+                showPinError('Vui lòng nhập đủ 6 số Mã PIN!');
                 return;
             }
 
-            errorMsg.classList.add('hidden');
-            const studentId = 'st_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-            currentStudentInfo = {
-                id: studentId,
-                name: fullname,
-                fullname: fullname,
-                avatar: selectedStudentAvatar,
-                joinedAt: new Date().toISOString(),
-                roomPin: enteredPin
-            };
+            // 4. Lấy Mã PIN phòng thi thực tế từ Giảng viên trong localStorage
+            const hostPin = (localStorage.getItem('quizgame_pin') || localStorage.getItem('quizgame_active_pin') || (roomState && roomState.pin) || '').trim();
 
-            let playersList = JSON.parse(localStorage.getItem('quizgame_players') || '[]');
-            playersList.push({
-                id: Date.now(),
-                name: fullname,
-                fullname: fullname,
-                avatar: selectedStudentAvatar,
-                joinedAt: currentStudentInfo.joinedAt,
-                roomPin: enteredPin
-            });
-            localStorage.setItem('quizgame_players', JSON.stringify(playersList));
-            localStorage.setItem('quizgame_last_update', Date.now().toString());
+            // 5. So sánh Mã PIN
+            if (enteredPin === hostPin) {
+                const studentId = 'st_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+                currentStudentInfo = {
+                    id: studentId,
+                    name: nameInput,
+                    fullname: nameInput,
+                    avatar: selectedStudentAvatar || '🦊',
+                    joinedAt: new Date().toISOString(),
+                    roomPin: enteredPin
+                };
 
-            if (!syncRoomState.joinedStudents.some(s => s.id === studentId)) {
-                syncRoomState.joinedStudents.push({ id: studentId, name: fullname, fullname: fullname, avatar: selectedStudentAvatar });
-                broadcastSyncRoomState();
+                let players = JSON.parse(localStorage.getItem('quizgame_players') || '[]');
+                const newPlayer = {
+                    id: Date.now(),
+                    name: nameInput,
+                    fullname: nameInput,
+                    avatar: selectedStudentAvatar || '🦊'
+                };
+                players.push(newPlayer);
+                localStorage.setItem('quizgame_players', JSON.stringify(players));
+                localStorage.setItem('quizgame_last_update', Date.now().toString());
+
+                if (!syncRoomState.joinedStudents.some(s => s.id === studentId || s.fullname === nameInput || s.name === nameInput)) {
+                    syncRoomState.joinedStudents.push({ id: studentId, name: nameInput, fullname: nameInput, avatar: selectedStudentAvatar || '🦊' });
+                    broadcastSyncRoomState();
+                }
+
+                const errorMsg = document.getElementById('student-error-msg');
+                if (errorMsg) errorMsg.classList.add('hidden');
+
+                closeModal('student-join-modal');
+                showStudentLobbyView();
+            } else {
+                showPinError('Mã PIN không đúng hoặc phòng thi chưa được mở!');
             }
-
-            closeModal('student-join-modal');
-            renderLobbyPlayers();
-            showLobbyView();
         }
 
         function loadSyncQuestion() {
@@ -2306,7 +2327,7 @@
         }
 
         function setupPinInputAutoAdvance() {
-            const inputs = document.querySelectorAll('.pin-input');
+            const inputs = document.querySelectorAll('.pin-digit-input, .pin-input');
             inputs.forEach((input, index) => {
                 input.addEventListener('input', (e) => {
                     const val = e.target.value;
@@ -2316,8 +2337,10 @@
                 });
 
                 input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Backspace' && !input.value && index > 0) {
-                        inputs[index - 1].focus();
+                    if (e.key === 'Backspace') {
+                        if (!input.value && index > 0) {
+                            inputs[index - 1].focus();
+                        }
                     }
                 });
             });
@@ -2331,12 +2354,19 @@
 
         function openStudentJoinModal(e) {
             if (e) e.preventDefault();
-            document.getElementById('student-error-msg').classList.add('hidden');
+            const errorMsg = document.getElementById('student-error-msg');
+            if (errorMsg) errorMsg.classList.add('hidden');
+
+            const nameInput = document.getElementById('studentNameInput') || document.getElementById('student-fullname');
+            if (nameInput) nameInput.value = '';
+
+            const pinInputs = document.querySelectorAll('.pin-digit-input, .pin-input');
+            pinInputs.forEach(input => input.value = '');
+
             renderAvatarPicker();
-            updateDebugActivePinDisplay();
             openModal('student-join-modal');
             setTimeout(() => {
-                const firstPinInput = document.querySelector('.pin-input[data-index="0"]');
+                const firstPinInput = document.querySelector('.pin-digit-input[data-index="0"]') || document.querySelector('.pin-input[data-index="0"]');
                 if (firstPinInput) firstPinInput.focus();
             }, 200);
         }
@@ -2513,6 +2543,13 @@
             renderLobbyPlayers();
             listenStorageChanges();
             handleSyncRoomStateChange();
+
+            const btnJoinLobby = document.getElementById('btnJoinLobby');
+            if (btnJoinLobby) {
+                btnJoinLobby.addEventListener('click', function(e) {
+                    submitStudentJoin(e);
+                });
+            }
 
             window.addEventListener('click', (e) => {
                 ['instructor-login-modal', 'student-join-modal', 'settings-modal', 'question-modal'].forEach(id => {
