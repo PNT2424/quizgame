@@ -1185,11 +1185,13 @@
             const pinCode = String(Math.floor(100000 + Math.random() * 900000)).trim();
             roomState.pin = pinCode;
             syncRoomState.pin = pinCode;
+            roomState.isOpen = true;
             
             saveRoomState();
+            localStorage.setItem('quizgame_pin', pinCode);
             localStorage.setItem('quizgame_active_pin', pinCode);
             localStorage.setItem('activePin', pinCode);
-            localStorage.setItem('quizgame_room_status', roomState.isOpen ? 'open' : 'closed');
+            localStorage.setItem('quizgame_room_status', 'open');
             
             updateDebugActivePinDisplay();
             broadcastSyncRoomState();
@@ -1345,6 +1347,10 @@
             syncRoomState.studentAnswers = {};
             syncRoomState.studentScores = {};
             syncRoomState.previousRanks = {};
+
+            localStorage.setItem('quizgame_game_state', 'playing');
+            localStorage.setItem('quizgame_current_question', '0');
+            localStorage.setItem('quizgame_step', 'question');
 
             broadcastSyncRoomState();
         }
@@ -1561,7 +1567,7 @@
             pinInputs.forEach(input => rawPin += input.value);
             
             let inputPin = String(rawPin).trim();
-            let activePin = String(localStorage.getItem('quizgame_active_pin') || localStorage.getItem('activePin') || (roomState && roomState.pin) || '839210').trim();
+            let activePin = String(localStorage.getItem('quizgame_pin') || localStorage.getItem('quizgame_active_pin') || localStorage.getItem('activePin') || (roomState && roomState.pin) || '839210').trim();
             let roomStatus = localStorage.getItem('quizgame_room_status') || (roomState && roomState.isOpen ? 'open' : 'closed');
 
             const errorMsg = document.getElementById('student-error-msg');
@@ -1584,6 +1590,10 @@
                 joinedAt: new Date().toISOString(),
                 roomPin: inputPin
             };
+
+            let players = JSON.parse(localStorage.getItem('quizgame_players') || '[]');
+            players.push(currentStudentInfo);
+            localStorage.setItem('quizgame_players', JSON.stringify(players));
 
             if (!syncRoomState.joinedStudents.some(s => s.id === studentId)) {
                 syncRoomState.joinedStudents.push({ id: studentId, fullname: fullname, avatar: selectedStudentAvatar });
@@ -2414,6 +2424,20 @@
             if (!text) return '';
             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
+
+        function startStudentQuiz() {
+            currentQuestionIndex = 0;
+            syncRoomState.questionIndex = 0;
+            syncRoomState.status = 'IN_QUESTION';
+            showQuizView();
+            loadSyncQuestion();
+        }
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'quizgame_game_state' && e.newValue === 'playing') {
+                startStudentQuiz();
+            }
+        });
 
         window.addEventListener('DOMContentLoaded', () => {
             document.getElementById('stat-high-score').textContent = highScore.toLocaleString('vi-VN');
