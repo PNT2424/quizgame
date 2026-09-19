@@ -170,7 +170,7 @@
 
                 <div id="instructor-header-container">
                     <button id="btn-login-instructor" type="button" onclick="openInstructorLoginModal(event)" 
-                            class="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600/60 hover:bg-indigo-600 border border-indigo-400/40 text-xs sm:text-sm font-semibold text-white transition-all duration-200 shadow-sm hover:shadow-indigo-500/30 active:scale-95 cursor-pointer">
+                            class="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600/80 hover:bg-indigo-500 border border-indigo-400/40 text-xs sm:text-sm font-semibold text-white transition-all duration-200 shadow-sm hover:shadow-indigo-500/40 active:scale-95 cursor-pointer">
                         <svg class="w-4 h-4 text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                         </svg>
@@ -178,14 +178,15 @@
                     </button>
 
                     <div id="instructor-logged-view" class="hidden flex items-center gap-2">
-                        <button type="button" onclick="showAdminView(event)" class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500/20 border border-amber-400/40 text-xs sm:text-sm font-bold text-amber-300 hover:bg-amber-500/30 transition-all cursor-pointer">
+                        <button type="button" onclick="showAdminView(event)" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-900/80 border border-purple-500/50 text-xs font-bold text-emerald-300 hover:bg-purple-800 transition-all cursor-pointer">
                             <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span>Quản lý phòng: <strong id="header-room-pin" class="text-white tracking-widest">839210</strong></span>
+                            <span id="instructor-fullname-badge">GV: Phạm Ngọc Thái</span>
                         </button>
-                        <button type="button" onclick="logoutInstructor(event)" title="Đăng xuất Giảng viên" class="p-2 rounded-xl bg-rose-900/40 hover:bg-rose-800/60 border border-rose-500/30 text-rose-300 transition-all cursor-pointer">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button type="button" onclick="logoutInstructor(event)" title="Đăng xuất Giảng viên" class="px-3 py-1.5 rounded-xl bg-rose-950/90 hover:bg-rose-900 border border-rose-500/50 text-xs font-bold text-rose-200 transition-all cursor-pointer flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                             </svg>
+                            <span>Đăng xuất</span>
                         </button>
                     </div>
                 </div>
@@ -256,8 +257,8 @@
                     <span>VÀO CHƠI GAME</span>
                 </button>
 
-                <button type="button" onclick="handleManageQuestionsClick(event)" 
-                        class="w-full sm:w-auto min-w-[200px] px-8 py-4 rounded-2xl bg-brand-purpleBtn hover:bg-purple-900/80 border border-purple-500/40 text-purple-200 hover:text-white font-bold text-base tracking-wide uppercase shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                <button id="btn-manage-questions" type="button" onclick="handleManageQuestionsClick(event)" 
+                        class="hidden w-full sm:w-auto min-w-[200px] px-8 py-4 rounded-2xl bg-brand-purpleBtn hover:bg-purple-900/80 border border-purple-500/40 text-purple-200 hover:text-white font-bold text-base tracking-wide uppercase shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer">
                     <svg class="w-5 h-5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                     </svg>
@@ -939,6 +940,9 @@
 
         let isAudioOn = true;
         let roomState = JSON.parse(localStorage.getItem('quizgame_room')) || { pin: "839210", isOpen: true };
+        if (!localStorage.getItem('activePin')) {
+            localStorage.setItem('activePin', (roomState.pin || "839210").toString().trim());
+        }
         let isInstructorLoggedIn = localStorage.getItem('quizgame_instructor_logged') === 'true';
         let highScore = parseInt(localStorage.getItem('quizgame_highscore')) || 4850;
 
@@ -1149,18 +1153,19 @@
             }
         }
 
-        // 🔴 SỬA LỖI 1: HÀM ĐỔI MÃ PIN GIẢNG VIÊN CÓ E.PREVENTDEFAULT() HOÀN TOÀN TÁCH BIỆT
+        // 🔴 SỬA LỖI 1: HÀM ĐỔI MÃ PIN GIẢNG VIÊN ĐỒNG BỘ VÀO LOCALSTORAGE ACTIVEPIN
         function generateNewPIN(e) {
             if (e) {
                 e.preventDefault();
                 e.stopPropagation();
             }
 
-            const newPin = Math.floor(100000 + Math.random() * 900000).toString();
+            const newPin = Math.floor(100000 + Math.random() * 900000).toString().trim();
             roomState.pin = newPin;
             syncRoomState.pin = newPin;
             
             saveRoomState();
+            localStorage.setItem('activePin', newPin);
             broadcastSyncRoomState();
 
             alert(`✅ Đã cập nhật Mã PIN phòng thi mới thành công: ${newPin}`);
@@ -1519,19 +1524,21 @@
             e.preventDefault();
             const fullname = document.getElementById('student-fullname').value.trim();
             const pinInputs = document.querySelectorAll('.pin-input');
-            let enteredPin = "";
-            pinInputs.forEach(input => enteredPin += input.value.trim());
+            let studentPin = "";
+            pinInputs.forEach(input => studentPin += input.value);
+            studentPin = studentPin.toString().trim();
 
+            const activePin = (localStorage.getItem('activePin') || (roomState && roomState.pin) || '839210').toString().trim();
             const errorMsg = document.getElementById('student-error-msg');
 
             if (!roomState.isOpen) {
-                errorMsg.textContent = "Phòng thi hiện đang ĐÓNG! Vui lòng liên hệ Giảng viên.";
+                errorMsg.textContent = "Mã PIN không tồn tại hoặc phòng thi chưa mở!";
                 errorMsg.classList.remove('hidden');
                 return;
             }
 
-            if (enteredPin !== roomState.pin) {
-                errorMsg.textContent = `Mã PIN không đúng! Vui lòng kiểm tra lại.`;
+            if (studentPin !== activePin) {
+                errorMsg.textContent = "Mã PIN không tồn tại hoặc phòng thi chưa mở!";
                 errorMsg.classList.remove('hidden');
                 return;
             }
@@ -1543,7 +1550,7 @@
                 fullname: fullname,
                 avatar: selectedStudentAvatar,
                 joinedAt: new Date().toISOString(),
-                roomPin: enteredPin
+                roomPin: studentPin
             };
 
             if (!syncRoomState.joinedStudents.some(s => s.id === studentId)) {
@@ -2163,18 +2170,21 @@
         function updateInstructorUI() {
             const loginBtn = document.getElementById('btn-login-instructor');
             const loggedView = document.getElementById('instructor-logged-view');
+            const manageBtn = document.getElementById('btn-manage-questions');
             const mobileLink = document.getElementById('mobile-instructor-link');
 
             if (isInstructorLoggedIn) {
                 if (loginBtn) loginBtn.classList.add('hidden');
                 if (loggedView) loggedView.classList.remove('hidden');
+                if (manageBtn) manageBtn.classList.remove('hidden');
                 if (mobileLink) {
-                    mobileLink.textContent = "Quản lý phòng thi (admin)";
+                    mobileLink.textContent = "Quản lý phòng thi (GV: Phạm Ngọc Thái)";
                     mobileLink.onclick = showAdminView;
                 }
             } else {
                 if (loginBtn) loginBtn.classList.remove('hidden');
                 if (loggedView) loggedView.classList.add('hidden');
+                if (manageBtn) manageBtn.classList.add('hidden');
                 if (mobileLink) {
                     mobileLink.textContent = "Đăng nhập dành cho Giảng viên";
                     mobileLink.onclick = openInstructorLoginModal;
@@ -2185,8 +2195,10 @@
         function logoutInstructor(e) {
             if (e) e.preventDefault();
             saveInstructorSession(false);
+            const adminView = document.getElementById('admin-view');
+            if (adminView) adminView.classList.add('hidden');
             showHomeView();
-            alert('Đã đăng xuất tài khoản Giảng viên!');
+            alert('Đã đăng xuất tài khoản Giảng viên thành công!');
         }
 
         function handleManageQuestionsClick(e) {
