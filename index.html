@@ -826,13 +826,17 @@
                 <div>
                     <label class="block text-xs font-bold text-purple-200 mb-2 uppercase tracking-wider">3. Nhập Mã PIN 6 số</label>
                     <div class="flex justify-center gap-2 sm:gap-3" id="pin-inputs-container">
-                        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="0">
+                        <input type="text" id="studentPinInput" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="0">
                         <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="1">
                         <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="2">
                         <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="3">
                         <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="4">
                         <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-input" data-index="5">
                     </div>
+                    <!-- DÒNG THÔNG BÁO DEBUG MÃ PIN TRONG BỘ NHỚ -->
+                    <p id="pin-debug-helper" class="text-[11px] text-purple-400 font-mono text-center pt-2 italic">
+                        (Mã PIN hiện tại trong bộ nhớ: <span id="debug-active-pin-text" class="text-amber-300 font-bold">839210</span>)
+                    </p>
                 </div>
 
                 <button type="submit" 
@@ -940,9 +944,18 @@
 
         let isAudioOn = true;
         let roomState = JSON.parse(localStorage.getItem('quizgame_room')) || { pin: "839210", isOpen: true };
+        
+        // ĐỒNG BỘ MÃ PIN VÀ TRẠNG THÁI PHÒNG CHUẨN CROSS-TAB LOCALSTORAGE
+        if (!localStorage.getItem('quizgame_active_pin')) {
+            localStorage.setItem('quizgame_active_pin', (roomState.pin || "839210").toString().trim());
+        }
         if (!localStorage.getItem('activePin')) {
             localStorage.setItem('activePin', (roomState.pin || "839210").toString().trim());
         }
+        if (!localStorage.getItem('quizgame_room_status')) {
+            localStorage.setItem('quizgame_room_status', roomState.isOpen ? 'open' : 'closed');
+        }
+
         let isInstructorLoggedIn = localStorage.getItem('quizgame_instructor_logged') === 'true';
         let highScore = parseInt(localStorage.getItem('quizgame_highscore')) || 4850;
 
@@ -1049,10 +1062,19 @@
             handleSyncRoomStateChange();
         }
 
+        // BẮT SỰ KIỆN LẮNG NGHE TRỰC TIẾP STORAGE EVENT LISTENER TRÊN TOÀN BỘ CÁC TAB
         window.addEventListener('storage', (e) => {
             if (e.key === 'quizgame_sync_room' && e.newValue) {
                 syncRoomState = JSON.parse(e.newValue);
                 handleSyncRoomStateChange();
+            }
+            if (e.key === 'quizgame_active_pin') {
+                console.log('Mã PIN phòng thi đã được cập nhật:', e.newValue);
+                updateDebugActivePinDisplay();
+            }
+            if (e.key === 'quizgame_room_status') {
+                roomState.isOpen = (e.newValue === 'open');
+                updateRoomUI();
             }
         });
 
@@ -1153,22 +1175,26 @@
             }
         }
 
-        // 🔴 SỬA LỖI 1: HÀM ĐỔI MÃ PIN GIẢNG VIÊN ĐỒNG BỘ VÀO LOCALSTORAGE ACTIVEPIN
+        // 🔴 SỬA LỖI MÃ PIN: TẠO VÀ ĐỒNG BỘ MÃ PIN 6 SỐ DẠNG CHUỖI CÙNG TRẠNG THÁI PHÒNG
         function generateNewPIN(e) {
             if (e) {
                 e.preventDefault();
                 e.stopPropagation();
             }
 
-            const newPin = Math.floor(100000 + Math.random() * 900000).toString().trim();
-            roomState.pin = newPin;
-            syncRoomState.pin = newPin;
+            const pinCode = String(Math.floor(100000 + Math.random() * 900000)).trim();
+            roomState.pin = pinCode;
+            syncRoomState.pin = pinCode;
             
             saveRoomState();
-            localStorage.setItem('activePin', newPin);
+            localStorage.setItem('quizgame_active_pin', pinCode);
+            localStorage.setItem('activePin', pinCode);
+            localStorage.setItem('quizgame_room_status', roomState.isOpen ? 'open' : 'closed');
+            
+            updateDebugActivePinDisplay();
             broadcastSyncRoomState();
 
-            alert(`✅ Đã cập nhật Mã PIN phòng thi mới thành công: ${newPin}`);
+            alert(`✅ Đã cập nhật Mã PIN phòng thi mới thành công: ${pinCode}`);
         }
 
         function toggleRoomStatus(e) {
@@ -1177,7 +1203,14 @@
                 e.stopPropagation();
             }
             roomState.isOpen = !roomState.isOpen;
+            localStorage.setItem('quizgame_room_status', roomState.isOpen ? 'open' : 'closed');
             saveRoomState();
+        }
+
+        function updateDebugActivePinDisplay() {
+            const activePin = (localStorage.getItem('quizgame_active_pin') || localStorage.getItem('activePin') || (roomState && roomState.pin) || '839210').toString().trim();
+            const debugTextElem = document.getElementById('debug-active-pin-text');
+            if (debugTextElem) debugTextElem.textContent = activePin;
         }
 
         function submitInstructorLogin(e) {
@@ -1524,21 +1557,20 @@
             e.preventDefault();
             const fullname = document.getElementById('student-fullname').value.trim();
             const pinInputs = document.querySelectorAll('.pin-input');
-            let studentPin = "";
-            pinInputs.forEach(input => studentPin += input.value);
-            studentPin = studentPin.toString().trim();
+            let rawPin = "";
+            pinInputs.forEach(input => rawPin += input.value);
+            
+            let inputPin = String(rawPin).trim();
+            let activePin = String(localStorage.getItem('quizgame_active_pin') || localStorage.getItem('activePin') || (roomState && roomState.pin) || '839210').trim();
+            let roomStatus = localStorage.getItem('quizgame_room_status') || (roomState && roomState.isOpen ? 'open' : 'closed');
 
-            const activePin = (localStorage.getItem('activePin') || (roomState && roomState.pin) || '839210').toString().trim();
             const errorMsg = document.getElementById('student-error-msg');
 
-            if (!roomState.isOpen) {
-                errorMsg.textContent = "Mã PIN không tồn tại hoặc phòng thi chưa mở!";
-                errorMsg.classList.remove('hidden');
-                return;
-            }
+            // ĐIỀU KIỆN SO SÁNH CHUẨN XÁC CHUỖI KHÔNG KHOẢNG TRẮNG
+            const isPinValid = (inputPin === activePin) && (roomStatus === 'open');
 
-            if (studentPin !== activePin) {
-                errorMsg.textContent = "Mã PIN không tồn tại hoặc phòng thi chưa mở!";
+            if (!isPinValid) {
+                errorMsg.textContent = `Mã PIN [${inputPin || 'Trống'}] không đúng hoặc Giảng viên chưa tạo phòng thi!`;
                 errorMsg.classList.remove('hidden');
                 return;
             }
@@ -1550,7 +1582,7 @@
                 fullname: fullname,
                 avatar: selectedStudentAvatar,
                 joinedAt: new Date().toISOString(),
-                roomPin: studentPin
+                roomPin: inputPin
             };
 
             if (!syncRoomState.joinedStudents.some(s => s.id === studentId)) {
@@ -2238,6 +2270,7 @@
             if (e) e.preventDefault();
             document.getElementById('student-error-msg').classList.add('hidden');
             renderAvatarPicker();
+            updateDebugActivePinDisplay();
             openModal('student-join-modal');
             setTimeout(() => {
                 const firstPinInput = document.querySelector('.pin-input[data-index="0"]');
